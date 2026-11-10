@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Long Video Session Planner</title>
+<meta name="description" content="Split a long YouTube video into daily study sessions with timestamp links and progress tracking.">
+<style>[hidden]{display:none!important}body{margin:0}img{max-width:100%}</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: left config panel + right plan; a full-video timeline strip segmented by day anchors the plan. */
+:root{
+  --bg:#f5f7f8; --surface:#ffffff; --fg:#14201f; --muted:#5b6b69; --line:#dde4e3;
+  --accent:#0f766e; --accent-soft:#d8efec; --done:#16a34a; --done-soft:#dcf5e3; --today:#b45309; --today-soft:#fdf0dc;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1413; --surface:#141d1c; --fg:#e6eeed; --muted:#93a5a2; --line:#253230;
+  --accent:#2dd4bf; --accent-soft:#123a36; --done:#4ade80; --done-soft:#123322; --today:#fbbf24; --today-soft:#3a2c0e; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1413; --surface:#141d1c; --fg:#e6eeed; --muted:#93a5a2; --line:#253230;
+  --accent:#2dd4bf; --accent-soft:#123a36; --done:#4ade80; --done-soft:#123322; --today:#fbbf24; --today-soft:#3a2c0e; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+header h1{font-family:var(--f-display);font-size:clamp(26px,4vw,36px);line-height:1.1;margin:0 0 6px;text-wrap:balance}
+header p{margin:0;color:var(--muted);max-width:65ch}
+.grid{display:grid;grid-template-columns:360px 1fr;gap:24px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:16px;min-width:0}
+label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600}
+.hint{font-weight:400;color:var(--muted);font-size:12px}
+input,textarea,select{font:inherit;font-size:14px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;width:100%}
+textarea{font-family:var(--f-mono);font-size:12.5px;min-height:150px;resize:vertical}
+input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.days{display:flex;flex-wrap:wrap;gap:6px}
+.days button{font:inherit;font-size:12px;font-weight:600;padding:6px 9px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);cursor:pointer}
+.days button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.err{color:var(--today);font-size:12.5px}
+.warn{color:var(--today);font-size:12.5px;background:var(--today-soft);border-radius:8px;padding:8px 10px;overflow-wrap:anywhere}
+.main{display:flex;flex-direction:column;gap:18px;min-width:0}
+.summary{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-end}
+.stat .v{font-family:var(--f-display);font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.stat .k{font-size:12px;color:var(--muted);margin-top:4px}
+.strip{display:flex;height:22px;border-radius:6px;overflow:hidden;border:1px solid var(--line);background:var(--bg)}
+.strip span{border-right:1px solid var(--surface);background:var(--accent-soft);cursor:pointer;min-width:2px}
+.strip span.done{background:var(--done)}
+.strip span.today{background:var(--today)}
+.strip-scale{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.btn{font:inherit;font-size:13px;font-weight:600;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn[aria-disabled="true"]{opacity:.45;pointer-events:none}
+.list{display:flex;flex-direction:column;gap:10px}
+.day{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:start}
+.day.is-today{border-color:var(--today);box-shadow:inset 4px 0 0 var(--today)}
+.day.is-done{background:var(--done-soft);border-color:transparent}
+.day input[type=checkbox]{width:20px;height:20px;margin-top:3px;accent-color:var(--done);cursor:pointer}
+.day h3{margin:0;font-size:15px;display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
+.day .date{font-weight:500;color:var(--muted);font-size:13px}
+.pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--today-soft);color:var(--today)}
+.ts{font-family:var(--f-mono);font-size:13px;font-variant-numeric:tabular-nums;margin-top:4px}
+.chap{margin:6px 0 0;padding:0;list-style:none;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:2px;min-width:0}
+.chap li{overflow-wrap:anywhere}
+.chap .t{font-family:var(--f-mono);font-size:12px;margin-right:6px}
+.day .act{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+@media (max-width:560px){.day{grid-template-columns:auto 1fr}.day .act{grid-column:2;align-items:flex-start;flex-direction:row}}
+.note{font-size:12.5px;color:var(--muted)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px}
+@media (prefers-reduced-motion:no-preference){.day{transition:background .2s,border-color .2s}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Long Video Session Planner</h1>
+    <p>Turn one long YouTube course into daily sessions. Each day gets a start and end timestamp, a link that opens the video at the right second, and a checkbox to track progress. Paste the chapter list from the video description and sessions will break at chapter boundaries.</p>
+  </header>
+
+  <div class="grid">
+    <form class="panel" id="cfg" autocomplete="off">
+      <div class="eyebrow">Video</div>
+      <label for="url">YouTube link <span class="hint">Any watch, youtu.be, or live link</span>
+        <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=...">
+      </label>
+      <label for="dur">Total length <span class="hint">As shown on YouTube, e.g. 13:52:10 or 2:02:29:18 (days first)</span>
+        <input id="dur" type="text" inputmode="numeric" value="13:52:10">
+      </label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="btn" id="detectBtn">Detect length</button><div class="note" id="durStatus" hidden style="flex:1;min-width:0"></div></div>
+      <label for="chap">Chapters (optional) <span class="hint">Copy the timestamp list from the description. One per line.</span>
+        <textarea id="chap" spellcheck="false"></textarea>
+      </label>
+
+      <div class="eyebrow">Schedule</div>
+      <div class="row">
+        <label for="mins">Minutes per day
+          <input id="mins" type="number" min="10" max="480" step="5" value="60">
+        </label>
+        <label for="speed">Playback speed
+          <select id="speed">
+            <option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="1.75">1.75×</option><option value="2">2×</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <label for="start">Start date
+          <input id="start" type="date">
+        </label>
+        <label for="snap">Break at chapters
+          <select id="snap"><option value="1">Yes, nearest</option><option value="0">No, exact time</option></select>
+        </label>
+      </div>
+      <div>
+        <div class="eyebrow" style="margin-bottom:8px">Study days</div>
+        <div class="days" id="days"></div>
+      </div>
+      <div class="err" id="err" hidden></div>
+      <div class="warn" id="warn" hidden></div>
+      <p class="note">Your settings and ticked days are saved in this browser only.</p>
+    </form>
+
+    <section class="main" aria-live="polite">
+      <div class="summary" id="summary"></div>
+      <div>
+        <div class="strip" id="strip" role="img" aria-label="Video timeline split by day"></div>
+        <div class="strip-scale" id="scale"></div>
+      </div>
+      <div class="toolbar">
+        <div class="note" id="progressNote"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="btn" id="copy">Copy plan as text</button>
+          <button type="button" class="btn" id="reset">Clear ticks</button>
+        </div>
+      </div>
+      <div class="list" id="list"></div>
+    </section>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+<div id="probeWrap" aria-hidden="true" style="position:absolute;left:-10000px;top:0;width:200px;height:200px;overflow:hidden;pointer-events:none"></div>
+
+<script>
+/* ===== CONFIG =====
+   Optional: paste a YouTube Data API v3 key to auto-fill BOTH length and chapters.
+   Leave empty to auto-fill length only (via the YouTube player). Restrict the key to
+   your website (HTTP referrer) and to "YouTube Data API v3" in Google Cloud Console. */
+const YT_API_KEY="";
+/* ================== */
+const $=id=>document.getElementById(id);
+const DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const SAMPLE_CHAPTERS=`0:00:00 Introduction and exam guide
+0:24:10 Cloud concepts
+1:18:45 Global infrastructure
+2:05:30 IAM and security basics
+3:12:00 Compute: EC2, Lambda, containers
+4:40:15 Storage: S3, EBS, EFS
+5:55:40 Databases: RDS, DynamoDB
+7:02:20 Networking: VPC, Route 53, CloudFront
+8:30:00 Monitoring and logging
+9:14:50 Pricing, billing and support
+10:20:05 Shared responsibility and compliance
+11:31:30 Practice questions
+13:20:00 Wrap-up`;
+let state={url:"",dur:"13:52:10",chap:SAMPLE_CHAPTERS,mins:60,speed:"1",start:todayISO(),snap:"1",days:[1,2,3,4,5,6,0],done:{}};
+try{const s=JSON.parse(localStorage.getItem("lvsp")||"null");if(s)state={...state,...s}}catch(e){}
+
+function todayISO(){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
+function save(){try{localStorage.setItem("lvsp",JSON.stringify(state))}catch(e){}}
+function parseTime(s){
+  s=String(s).trim();if(!s)return NaN;
+  if(/^\d+(\.\d+)?\s*(m|min|mins|minutes)$/i.test(s))return parseFloat(s)*60;
+  if(/^\d+(\.\d+)?\s*(h|hr|hrs|hours)$/i.test(s))return parseFloat(s)*3600;
+  const p=s.split(":").map(Number);if(p.some(isNaN)||p.length>4)return NaN;
+  if(p.length===4)return p[0]*86400+p[1]*3600+p[2]*60+p[3];
+  return p.reduce((a,b)=>a*60+b,0);
+}
+function fmt(sec){sec=Math.round(sec);const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;return `${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`}
+function human(sec){const m=Math.round(sec/60);const h=Math.floor(m/60);return h?`${h}h ${m%60}m`:`${m}m`}
+function videoId(u){
+  if(!u)return "";
+  const m=u.match(/(?:v=|youtu\.be\/|\/live\/|\/embed\/|\/shorts\/)([A-Za-z0-9_-]{11})/);
+  return m?m[1]:(/^[A-Za-z0-9_-]{11}$/.test(u.trim())?u.trim():"");
+}
+function parseChapters(txt,dur){
+  const list=[],skipped=[];let last=-1,beyond=null;
+  for(const line of txt.split(/\r?\n/)){
+    const m=line.match(/(\d{1,3}:\d{2}(?::\d{2})?)/);if(!m)continue;
+    const t=parseTime(m[1]);if(isNaN(t))continue;
+    const title=line.replace(m[1],"").replace(/^[\s\-\u2013\u2014:|.)\]]+|[\s\-\u2013\u2014:|]+$/g,"").trim()||"Chapter";
+    if(t<=last){skipped.push(`${m[1]} ${title}`);continue}
+    if(t>dur){if(beyond===null)beyond=t;continue}
+    list.push({t,title});last=t;
+  }
+  return {list,skipped,beyond};
+}
+function build(){
+  const dur=parseTime(state.dur);
+  const err=$("err");
+  if(!dur||isNaN(dur)){err.textContent="Enter the total length like 13:52:10 or 90 min.";err.hidden=false;return null}
+  err.hidden=true;
+  const chunk=Number(state.mins)*60*Number(state.speed);
+  if(!chunk)return null;
+  const pc=parseChapters(state.chap,dur);const chaps=pc.list;
+  const w=[];
+  if(pc.beyond!==null)w.push(`Total length (${fmt(dur)}) is shorter than a chapter at ${fmt(pc.beyond)}. Check the length on YouTube.`);
+  if(pc.skipped.length)w.push(`Skipped out-of-order timestamps: ${pc.skipped.map(esc).join(", ")}`);
+  $("warn").innerHTML=w.join("<br>");$("warn").hidden=!w.length;
+  const tol=chunk*0.2, minTail=Math.min(chunk*0.25,15*60);
+  const sessions=[];let cur=0;
+  while(cur<dur-1){
+    let end=Math.min(cur+chunk,dur);
+    if(state.snap==="1"&&chaps.length&&end<dur){
+      let best=null;
+      for(const c of chaps){if(c.t>cur+chunk*0.5&&Math.abs(c.t-end)<=tol&&(!best||Math.abs(c.t-end)<Math.abs(best-end)))best=c.t}
+      if(best!==null)end=best;
+    }
+    if(dur-end<minTail)end=dur;
+    sessions.push({s:cur,e:end});cur=end;
+  }
+  // dates
+  const days=new Set(state.days.map(Number));
+  let d=new Date(state.start+"T00:00:00");if(isNaN(d))d=new Date();
+  sessions.forEach(x=>{
+    let guard=0;while(days.size&&!days.has(d.getDay())&&guard++<7)d.setDate(d.getDate()+1);
+    x.date=new Date(d);d.setDate(d.getDate()+1);
+    x.chaps=chaps.filter(c=>c.t>=x.s&&c.t<x.e);
+    const prev=chaps.filter(c=>c.t<x.s).pop();
+    if(prev&&(!x.chaps.length||x.chaps[0].t>x.s))x.cont=prev.title;
+  });
+  return {dur,sessions,chaps};
+}
+function isoDate(d){const z=new Date(d);z.setMinutes(z.getMinutes()-z.getTimezoneOffset());return z.toISOString().slice(0,10)}
+function link(id,t){return id?`https://www.youtube.com/watch?v=${id}&t=${Math.floor(t)}s`:""}
+function key(){return videoId(state.url)||"sample"}
+function render(){
+  const plan=build();const list=$("list");
+  if(!plan){list.innerHTML="";$("summary").innerHTML="";$("strip").innerHTML="";return}
+  const id=videoId(state.url);const done=state.done[key()]||{};
+  const today=todayISO();const sp=Number(state.speed);
+  const n=plan.sessions.length;const nd=plan.sessions.filter((_,i)=>done[i]).length;
+  const last=plan.sessions[n-1];
+  $("summary").innerHTML=`
+    <div class="stat"><div class="v">${n}</div><div class="k">sessions</div></div>
+    <div class="stat"><div class="v">${human(plan.dur/sp)}</div><div class="k">total watch time at ${sp}×</div></div>
+    <div class="stat"><div class="v">${last.date.toLocaleDateString(undefined,{month:"short",day:"numeric"})}</div><div class="k">finish date</div></div>
+    <div class="stat"><div class="v">${Math.round(nd/n*100)}%</div><div class="k">${nd} of ${n} done</div></div>`;
+  $("strip").innerHTML=plan.sessions.map((x,i)=>`<span style="flex:${x.e-x.s}" class="${done[i]?"done":isoDate(x.date)===today?"today":""}" title="Day ${i+1}: ${fmt(x.s)}–${fmt(x.e)}" data-i="${i}"></span>`).join("");
+  $("scale").innerHTML=`<span>0:00:00</span><span>${fmt(plan.dur/2)}</span><span>${fmt(plan.dur)}</span>`;
+  const next=plan.sessions.findIndex((_,i)=>!done[i]);
+  $("progressNote").textContent=next<0?"All sessions complete.":`Next up: Day ${next+1}, starting at ${fmt(plan.sessions[next].s)}`+(id?"":". Add the video link to enable the Open buttons.");
+  list.innerHTML=plan.sessions.map((x,i)=>{
+    const isToday=isoDate(x.date)===today;
+    const ch=[];
+    if(x.cont)ch.push(`<li><span class="t">cont.</span>${esc(x.cont)}</li>`);
+    x.chaps.forEach(c=>ch.push(`<li><span class="t">${fmt(c.t)}</span>${esc(c.title)}</li>`));
+    return `<article class="day${isToday?" is-today":""}${done[i]?" is-done":""}" id="day-${i}">
+      <input type="checkbox" id="chk-${i}" data-i="${i}" ${done[i]?"checked":""} aria-label="Mark day ${i+1} done">
+      <div style="min-width:0">
+        <h3>Day ${i+1} <span class="date">${x.date.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"})}</span>${isToday?'<span class="pill">Today</span>':""}</h3>
+        <div class="ts">${fmt(x.s)} → ${fmt(x.e)} · ${human((x.e-x.s)/sp)} at ${sp}×</div>
+        ${ch.length?`<ul class="chap">${ch.join("")}</ul>`:""}
+      </div>
+      <div class="act">
+        <a class="btn primary" href="${link(id,x.s)||"#"}" target="_blank" rel="noopener" ${id?"":'aria-disabled="true"'}>Open at ${fmt(x.s)}</a>
+      </div>
+    </article>`}).join("");
+  window._plan=plan;
+}
+function esc(s){return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>el.hidden=true,1800)}
+
+let ytReady=null,player=null,lastDetected="",detectTimer=null,detectRun=0;
+function loadYT(){
+  if(ytReady)return ytReady;
+  ytReady=new Promise((res,rej)=>{
+    if(window.YT&&window.YT.Player)return res();
+    const prev=window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady=()=>{prev&&prev();res()};
+    const sc=document.createElement("script");sc.src="https://www.youtube.com/iframe_api";sc.onerror=()=>rej(new Error("blocked"));
+    document.head.appendChild(sc);setTimeout(()=>rej(new Error("timeout")),10000);
+  });
+  ytReady.catch(()=>{ytReady=null});
+  return ytReady;
+}
+function isoDur(s){const m=String(s).match(/P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?/);if(!m)return 0;
+  return (+(m[1]||0))*86400+(+(m[2]||0))*3600+(+(m[3]||0))*60+(+(m[4]||0))}
+async function fetchMeta(id){
+  const r=await fetch(`https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id=${encodeURIComponent(id)}&key=${encodeURIComponent(YT_API_KEY)}`);
+  const j=await r.json();if(!r.ok)throw new Error(j.error&&j.error.message||"API error");
+  const it=j.items&&j.items[0];if(!it)throw new Error("Video not found");
+  return {dur:isoDur(it.contentDetails.duration),desc:it.snippet.description||""};
+}
+async function detect(){
+  const id=videoId(state.url);const st=$("durStatus");
+  if(!id){detectRun++;st.textContent="Paste a YouTube link first.";st.hidden=false;lastDetected="";return}
+  if(id===lastDetected)return;lastDetected=id;
+  st.hidden=false;
+  if(location.protocol==="file:"){st.textContent="Auto-detect needs the page to be served (http://localhost or your website). It doesn't work when the file is opened directly.";return}
+  const run=++detectRun;const live=()=>run===detectRun; // ignore results from an older URL
+  st.textContent="Reading the length from YouTube...";
+  if(state.chap===SAMPLE_CHAPTERS){state.chap="";$("chap").value="";save();render()}
+  if(YT_API_KEY){
+    try{const m=await fetchMeta(id);
+      if(!live())return;
+      if(m.dur>0){state.dur=fmt(m.dur);$("dur").value=state.dur}
+      const lines=m.desc.split(/\r?\n/).filter(l=>/\d{1,3}:\d{2}/.test(l));
+      if(lines.length>=2){state.chap=lines.join("\n");$("chap").value=state.chap}
+      save();render();
+      st.textContent=`Read from YouTube: length ${fmt(m.dur)}`+(lines.length>=2?`, ${lines.length} chapters`:", no chapters in description");
+      return;
+    }catch(e){if(!live())return;console.log("[Planner] API error",e.message);st.textContent="API lookup failed ("+e.message+"). Trying the player instead..."}
+  }
+  try{
+    await loadYT();
+    if(!live())return;
+    if(player){try{player.destroy()}catch(e){}player=null}
+    $("probeWrap").innerHTML='<div id="ytprobe"></div>';
+    let finished=false,p=null,iv=null;
+    // stop: end this probe. Polling and the 15 s timeout are both cleared here, and only here.
+    const stop=()=>{finished=true;clearInterval(iv);clearTimeout(failTimer);try{p.stopVideo()}catch(e){}};
+    const finish=(d)=>{if(finished)return;stop();if(!live())return;
+      // The player reports whole seconds, rounded (181758.x s -> 181759); the Data API path is exact.
+      state.dur=fmt(d);$("dur").value=state.dur;save();render();
+      st.textContent=`Length read from YouTube: ${fmt(d)}`;console.log("[Planner] duration",d)};
+    const tryRead=()=>{if(finished)return true;const d=p&&p.getDuration&&p.getDuration();if(d>0){finish(d);return true}return false};
+    const failTimer=setTimeout(()=>{if(finished)return;stop();if(!live())return;console.log("[Planner] timed out");
+      st.textContent="YouTube didn't return a length in time. Check the browser console for [Planner] messages, or enter it manually."},15000);
+    p=player=new YT.Player("ytprobe",{videoId:id,width:200,height:200,
+      playerVars:{autoplay:0,controls:0,mute:1,playsinline:1,origin:location.origin},
+      events:{
+        onReady:e=>{console.log("[Planner] player ready");
+          if(tryRead())return;
+          // duration can be 0 until playback starts: play muted briefly and poll
+          try{e.target.mute();e.target.playVideo()}catch(err){}
+          let n=0;iv=setInterval(()=>{if(tryRead()||++n>40)clearInterval(iv)},300)},
+        onStateChange:()=>{tryRead()},
+        onError:e=>{if(finished)return;stop();console.log("[Planner] player error",e.data);if(!live())return;
+          const msg={2:"invalid video ID",5:"HTML5 player error",100:"video not found or private",101:"the video is private, removed, or can't be embedded",150:"the video is private, removed, or can't be embedded",153:"missing referrer (open the page via http://localhost or your website, not as a file)"}[e.data]||("error code "+e.data);
+          st.textContent=`YouTube refused: ${msg}. Enter the length manually.`}
+      }});
+  }catch(err){if(!live())return;console.log("[Planner] iframe_api failed:",err.message);
+    st.textContent=err.message==="blocked"?"Couldn't load the YouTube player script. An ad blocker or privacy extension may be blocking youtube.com. Enter the length manually."
+      :"Automatic length detection isn't available on this page. Enter the length shown on YouTube."}
+}
+
+// init form
+$("url").value=state.url;$("dur").value=state.dur;$("chap").value=state.chap;$("mins").value=state.mins;
+$("speed").value=state.speed;$("start").value=state.start;$("snap").value=state.snap;
+$("days").innerHTML=[1,2,3,4,5,6,0].map(d=>`<button type="button" data-d="${d}" aria-pressed="${state.days.includes(d)}">${DOW[d]}</button>`).join("");
+["url","dur","chap","mins","speed","start","snap"].forEach(k=>$(k).addEventListener("input",()=>{state[k]=$(k).value;save();render();
+  if(k==="url"){clearTimeout(detectTimer);detectTimer=setTimeout(detect,500)}
+  if(k==="dur")$("durStatus").hidden=true}));
+$("cfg").addEventListener("submit",e=>e.preventDefault());
+$("detectBtn").addEventListener("click",()=>{lastDetected="";detect()});
+$("days").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const d=Number(b.dataset.d);
+  const on=state.days.includes(d);if(on&&state.days.length===1)return;
+  state.days=on?state.days.filter(x=>x!==d):[...state.days,d];b.setAttribute("aria-pressed",!on);save();render()});
+$("list").addEventListener("change",e=>{if(e.target.type!=="checkbox")return;const k=key();state.done[k]=state.done[k]||{};
+  state.done[k][e.target.dataset.i]=e.target.checked;save();render()});
+$("strip").addEventListener("click",e=>{const i=e.target.dataset.i;if(i!=null)$("day-"+i)?.scrollIntoView({behavior:"smooth",block:"center"})});
+$("reset").addEventListener("click",()=>{state.done[key()]={};save();render();toast("Ticks cleared")});
+$("copy").addEventListener("click",()=>{
+  const p=window._plan;if(!p)return;const id=videoId(state.url);const sp=Number(state.speed);
+  const txt=p.sessions.map((x,i)=>{const t=[x.cont,...x.chaps.map(c=>c.title)].filter(Boolean).join("; ");
+    return `Day ${i+1} (${x.date.toDateString()}): ${fmt(x.s)} – ${fmt(x.e)} [${human((x.e-x.s)/sp)}]${t?" | "+t:""}${id?"\n  "+link(id,x.s):""}`}).join("\n");
+  navigator.clipboard.writeText(txt).then(()=>toast("Plan copied")).catch(()=>{const ta=document.createElement("textarea");ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand("copy");toast("Plan copied")}catch(e){toast("Select and copy manually")}ta.remove()});
+});
+render();
+detect();
+</script>
+</body>
+</html>

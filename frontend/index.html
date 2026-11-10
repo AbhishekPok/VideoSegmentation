@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Long Video Session Planner</title>
+<meta name="description" content="Split a long YouTube video into daily study sessions with timestamp links and progress tracking.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f766e'/%3E%3Cpath d='M12 9l11 7-11 7z' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<div class="wrap">
+  <header class="topbar">
+    <div>
+      <h1>Long Video Session Planner</h1>
+      <p>Turn one long YouTube course into daily sessions. Each day gets a start and end timestamp, a link that opens the video at the right second, and a checkbox to track progress.</p>
+    </div>
+    <div class="user" id="userBox" hidden>
+      <span id="userEmail"></span>
+      <button type="button" class="btn" id="logout">Log out</button>
+    </div>
+  </header>
+
+  <!-- Shown while checking the session -->
+  <p class="note" id="booting">Loading...</p>
+
+  <!-- Login / sign up -->
+  <section class="panel auth" id="authView" hidden aria-labelledby="authTitle">
+    <h2 id="authTitle">Sign in</h2>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="tabLogin" aria-selected="true">Log in</button>
+      <button type="button" role="tab" id="tabRegister" aria-selected="false">Create account</button>
+    </div>
+    <form id="authForm" novalidate>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <label for="email">Email
+          <input id="email" type="email" autocomplete="email" required>
+        </label>
+        <label for="password">Password <span class="hint" id="pwHint" hidden>At least 8 characters</span>
+          <input id="password" type="password" autocomplete="current-password" required minlength="8">
+        </label>
+        <div class="err" id="authErr" hidden role="alert"></div>
+        <button type="submit" class="btn primary" id="authSubmit" style="justify-content:center">Log in</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Main app -->
+  <div id="appView" hidden>
+    <div class="planbar" style="margin-bottom:18px">
+      <label for="planSelect" class="eyebrow" style="flex-direction:row">Plan</label>
+      <select id="planSelect" aria-label="Choose a plan"></select>
+      <button type="button" class="btn" id="newPlan">New plan</button>
+      <button type="button" class="btn danger" id="deletePlan">Delete plan</button>
+    </div>
+
+    <div class="grid">
+      <form class="panel" id="cfg" autocomplete="off">
+        <label for="title">Plan name
+          <input id="title" type="text" maxlength="200">
+        </label>
+        <div class="eyebrow">Video</div>
+        <label for="url">YouTube link <span class="hint">Any watch, youtu.be, or live link</span>
+          <input id="url" type="url" maxlength="500" placeholder="https://www.youtube.com/watch?v=...">
+        </label>
+        <label for="dur">Total length <span class="hint">As shown on YouTube, e.g. 13:52:10 or 2:02:29:18 (days first)</span>
+          <input id="dur" type="text" inputmode="numeric" maxlength="32">
+        </label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="btn" id="detectBtn">Detect length</button><div class="note" id="durStatus" hidden style="flex:1;min-width:0" role="status"></div></div>
+        <label for="chap">Chapters (optional) <span class="hint">Copy the timestamp list from the description. One per line.</span>
+          <textarea id="chap" spellcheck="false" maxlength="50000"></textarea>
+        </label>
+
+        <div class="eyebrow">Schedule</div>
+        <div class="row">
+          <label for="mins">Minutes per day
+            <input id="mins" type="number" min="10" max="480" step="5">
+          </label>
+          <label for="speed">Playback speed
+            <select id="speed">
+              <option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="1.75">1.75×</option><option value="2">2×</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label for="start">Start date
+            <input id="start" type="date">
+          </label>
+          <label for="snap">Break at chapters
+            <select id="snap"><option value="1">Yes, nearest</option><option value="0">No, exact time</option></select>
+          </label>
+        </div>
+        <div>
+          <div class="eyebrow" style="margin-bottom:8px">Study days</div>
+          <div class="days" id="days"></div>
+        </div>
+        <div class="err" id="err" hidden role="alert"></div>
+        <div class="warn" id="warn" hidden></div>
+        <div class="saved" id="saved" role="status"></div>
+      </form>
+
+      <section class="main" aria-live="polite">
+        <div class="summary" id="summary"></div>
+        <div>
+          <div class="strip" id="strip" role="img" aria-label="Video timeline split by day"></div>
+          <div class="strip-scale" id="scale"></div>
+        </div>
+        <div class="toolbar">
+          <div class="note" id="progressNote"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" class="btn" id="copy">Copy plan as text</button>
+            <button type="button" class="btn" id="reset">Clear ticks</button>
+          </div>
+        </div>
+        <div class="list" id="list"></div>
+      </section>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden role="status"></div>
+<div id="probeWrap" class="probe" aria-hidden="true"></div>
+</body>
+</html>

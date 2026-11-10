@@ -1,0 +1,53 @@
+# ---- Claude / AI assistant files ----
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+.claude.json
+.mcp.json
+.claudeignore
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# ---- Secrets and local config ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---- Local data ----
+backend/data/
+*.db
+*.sqlite
+*.sqlite3
+
+# ---- Logs ----
+*.log
+logs/
+
+# ---- Node (in case tooling is added) ----
+node_modules/
+
+# ---- Editors / IDEs ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- OS ----
+.DS_Store
+Thumbs.db

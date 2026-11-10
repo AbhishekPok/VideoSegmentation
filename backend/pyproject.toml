@@ -1,0 +1,31 @@
+[project]
+name = "lvsp-backend"
+version = "1.0.0"
+description = "Long Video Session Planner: API server (FastAPI) for the 3-tier app"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.162",
+    "uvicorn[standard]>=0.54",
+    "sqlalchemy>=2.1",
+    "alembic>=1.20",
+    "psycopg[binary]>=3.3",        # PostgreSQL driver (used when DATABASE_URL is postgresql+psycopg://)
+    "pydantic-settings>=2.16",
+    "email-validator>=2.3",
+    "argon2-cffi>=25.1",
+    "httpx>=0.28",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=9.2"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]
